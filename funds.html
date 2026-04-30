@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Funds Tracker</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    #totalOwed { font-weight: bold; color: red; }
+  </style>
+</head>
+<body>
+  <h1>Team Funds Tracker</h1>
+
+  <form id="absenceForm">
+    <label>Player: <input type="text" id="player"></label>
+    <label>Date: <input type="date" id="date"></label>
+    <label>Amount: <input type="number" id="amount"></label>
+    <button type="submit">Add Absence</button>
+  </form>
+
+  <h2>Total Owed: <span id="totalOwed">0</span></h2>
+
+  <table id="absenceTable">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Date</th>
+        <th>Amount</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script type="module">
+    // Import Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue, set } 
+      from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    // Your Firebase config (paste yours here)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDfYRtZHEvu8qkpaaTZ_Wr79efpy5ODI9c",
+      authDomain: "funds-tracker-d9188.firebaseapp.com",
+      databaseURL: "https://funds-tracker-d9188-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "funds-tracker-d9188",
+      storageBucket: "funds-tracker-d9188.firebasestorage.app",
+      messagingSenderId: "400103942864",
+      appId: "1:400103942864:web:ba4f53dcbe2e6ccc42cd5",
+      measurementId: "G-26WH17E5Z3"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Add absence
+    function addAbsence(player, date, amount, status = "unpaid") {
+      push(ref(db, "absences"), { player, date, amount, status });
+    }
+
+    // Delete absence
+    function deleteAbsence(id) {
+      set(ref(db, "absences/" + id), null);
+    }
+
+    // Render table + update balances
+    function renderAbsences(data) {
+      const tbody = document.querySelector("#absenceTable tbody");
+      tbody.innerHTML = "";
+      let totalOwed = 0;
+
+      if (data) {
+        Object.entries(data).forEach(([id, absence]) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${absence.player}</td>
+            <td>${absence.date}</td>
+            <td>${absence.amount}</td>
+            <td>${absence.status}</td>
+            <td><button onclick="deleteAbsence('${id}')">Delete</button></td>
+          `;
+          tbody.appendChild(row);
+
+          if (absence.status === "unpaid") {
+            totalOwed += parseFloat(absence.amount);
+          }
+        });
+      }
+
+      document.getElementById("totalOwed").textContent = totalOwed;
+    }
+
+    // Listen for changes in Firebase
+    onValue(ref(db, "absences"), snapshot => {
+      renderAbsences(snapshot.val());
+    });
+
+    // Handle form submission
+    document.getElementById("absenceForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const player = document.getElementById("player").value;
+      const date = document.getElementById("date").value;
+      const amount = document.getElementById("amount").value;
+      addAbsence(player, date, amount);
+      e.target.reset();
+    });
+
+    // Expose deleteAbsence globally for button onclick
+    window.deleteAbsence = deleteAbsence;
+  </script>
+</body>
+</html>
