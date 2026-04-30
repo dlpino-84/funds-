@@ -2,47 +2,97 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Funds Tracker</title>
+  <title>Team Funds Tracker</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    h1 { margin-bottom: 10px; }
+    section { margin-bottom: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; }
-    #totalOwed { font-weight: bold; color: red; }
+    .unpaid { background-color: #ffe0e0; }
+    .paid { background-color: #e0ffe0; }
+    #totals span { font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>Team Funds Tracker</h1>
 
-  <form id="absenceForm">
-    <label>Player: <input type="text" id="player"></label>
-    <label>Date: <input type="date" id="date"></label>
-    <label>Amount: <input type="number" id="amount"></label>
-    <button type="submit">Add Absence</button>
-  </form>
+  <!-- Starting Balance -->
+  <section>
+    <h2>Set Starting Balance</h2>
+    <label>Total Funds: <input type="number" id="totalFunds"></label>
+    <label>Cash on Hand: <input type="number" id="cashOnHand"></label>
+    <button id="setBalance">Set Balance</button>
+  </section>
 
-  <h2>Total Owed: <span id="totalOwed">0</span></h2>
+  <!-- Add Player -->
+  <section>
+    <h2>Add Player</h2>
+    <input type="text" id="playerName" placeholder="Player Name">
+    <button id="addPlayer">Add</button>
+  </section>
 
-  <table id="absenceTable">
-    <thead>
-      <tr>
-        <th>Player</th>
-        <th>Date</th>
-        <th>Amount</th>
-        <th>Status</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <!-- Absence -->
+  <section>
+    <h2>Record Absence</h2>
+    <select id="absencePlayer"></select>
+    <input type="date" id="absenceDate">
+    <input type="number" id="absenceAmount" placeholder="Amount (default 100)" value="100">
+    <button id="recordAbsence">Record Absence</button>
+  </section>
+
+  <!-- Payment -->
+  <section>
+    <h2>Record Payment</h2>
+    <select id="paymentPlayer"></select>
+    <input type="number" id="paymentAmount" placeholder="Payment Amount">
+    <button id="recordPayment">Record Payment</button>
+  </section>
+
+  <!-- Expense -->
+  <section>
+    <h2>Record Expense</h2>
+    <input type="text" id="expenseDesc" placeholder="Expense Description">
+    <input type="number" id="expenseAmount" placeholder="Expense Amount">
+    <button id="recordExpense">Record Expense</button>
+  </section>
+
+  <!-- Totals -->
+  <section id="totals">
+    <h2>Totals</h2>
+    <p>Total Funds: <span id="displayTotalFunds">0</span></p>
+    <p>Cash on Hand: <span id="displayCashOnHand">0</span></p>
+    <p>Total Expenses: <span id="displayExpenses">0</span></p>
+  </section>
+
+  <!-- Absences Table -->
+  <section>
+    <h2>Absences</h2>
+    <table>
+      <thead>
+        <tr><th>Player</th><th>Date</th><th>Amount</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody id="absenceTable"></tbody>
+    </table>
+  </section>
+
+  <!-- Expenses Table -->
+  <section>
+    <h2>Expenses</h2>
+    <table>
+      <thead>
+        <tr><th>Description</th><th>Amount</th><th>Action</th></tr>
+      </thead>
+      <tbody id="expenseTable"></tbody>
+    </table>
+  </section>
 
   <script type="module">
-    // Import Firebase SDKs
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, set } 
+    import { getDatabase, ref, push, set, onValue, update } 
       from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-    // Your Firebase config (paste yours here)
     const firebaseConfig = {
       apiKey: "AIzaSyDfYRtZHEvu8qkpaaTZ_Wr79efpy5ODI9c",
       authDomain: "funds-tracker-d9188.firebaseapp.com",
@@ -54,64 +104,92 @@
       measurementId: "G-26WH17E5Z3"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Add absence
-    function addAbsence(player, date, amount, status = "unpaid") {
-      push(ref(db, "absences"), { player, date, amount, status });
-    }
+    // --- BALANCES ---
+    document.getElementById("setBalance").onclick = () => {
+      const totalFunds = document.getElementById("totalFunds").value;
+      const cashOnHand = document.getElementById("cashOnHand").value;
+      set(ref(db, "balances"), { totalFunds, cashOnHand });
+    };
+    onValue(ref(db, "balances"), snap => {
+      const b = snap.val() || { totalFunds:0, cashOnHand:0 };
+      document.getElementById("displayTotalFunds").textContent = b.totalFunds;
+      document.getElementById("displayCashOnHand").textContent = b.cashOnHand;
+    });
 
-    // Delete absence
-    function deleteAbsence(id) {
-      set(ref(db, "absences/" + id), null);
-    }
+    // --- PLAYERS ---
+    document.getElementById("addPlayer").onclick = () => {
+      const name = document.getElementById("playerName").value;
+      if(name) push(ref(db, "players"), name);
+    };
+    onValue(ref(db, "players"), snap => {
+      const players = snap.val() || {};
+      const absenceSel = document.getElementById("absencePlayer");
+      const paymentSel = document.getElementById("paymentPlayer");
+      absenceSel.innerHTML = ""; paymentSel.innerHTML = "";
+      Object.values(players).forEach(p => {
+        absenceSel.innerHTML += `<option>${p}</option>`;
+        paymentSel.innerHTML += `<option>${p}</option>`;
+      });
+    });
 
-    // Render table + update balances
-    function renderAbsences(data) {
-      const tbody = document.querySelector("#absenceTable tbody");
+    // --- ABSENCES ---
+    document.getElementById("recordAbsence").onclick = () => {
+      const player = document.getElementById("absencePlayer").value;
+      const date = document.getElementById("absenceDate").value;
+      const amount = document.getElementById("absenceAmount").value || 100;
+      push(ref(db, "absences"), { player, date, amount, status:"unpaid" });
+    };
+    function markPaid(id, absence){
+      update(ref(db, "absences/"+id), { ...absence, status:"paid" });
+    }
+    function deleteAbsence(id){ set(ref(db, "absences/"+id), null); }
+    onValue(ref(db, "absences"), snap => {
+      const data = snap.val() || {};
+      const tbody = document.getElementById("absenceTable");
       tbody.innerHTML = "";
-      let totalOwed = 0;
+      let totalFunds = 0;
+      Object.entries(data).forEach(([id,a])=>{
+        const row = document.createElement("tr");
+        row.className = a.status==="unpaid"?"unpaid":"paid";
+        row.innerHTML = `
+          <td>${a.player}</td>
+          <td>${a.date}</td>
+          <td>${a.amount}</td>
+          <td>${a.status}</td>
+          <td>
+            ${a.status==="unpaid" ? `<button onclick='markPaid("${id}",${JSON.stringify(a)})'>Mark Paid</button>`:""}
+            <button onclick='deleteAbsence("${id}")'>Delete</button>
+          </td>`;
+        tbody.appendChild(row);
+        if(a.status==="unpaid") totalFunds += parseFloat(a.amount);
+      });
+      document.getElementById("displayTotalFunds").textContent = totalFunds;
+    });
+    window.markPaid = markPaid; window.deleteAbsence = deleteAbsence;
 
-      if (data) {
-        Object.entries(data).forEach(([id, absence]) => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${absence.player}</td>
-            <td>${absence.date}</td>
-            <td>${absence.amount}</td>
-            <td>${absence.status}</td>
-            <td><button onclick="deleteAbsence('${id}')">Delete</button></td>
-          `;
-          tbody.appendChild(row);
-
-          if (absence.status === "unpaid") {
-            totalOwed += parseFloat(absence.amount);
-          }
-        });
-      }
-
-      document.getElementById("totalOwed").textContent = totalOwed;
-    }
-
-    // Listen for changes in Firebase
-    onValue(ref(db, "absences"), snapshot => {
-      renderAbsences(snapshot.val());
+    // --- PAYMENTS ---
+    document.getElementById("recordPayment").onclick = () => {
+      const player = document.getElementById("paymentPlayer").value;
+      const amount = document.getElementById("paymentAmount").value;
+      push(ref(db, "payments"), { player, amount });
+    };
+    onValue(ref(db, "payments"), snap => {
+      const data = snap.val() || {};
+      let cash = 0;
+      Object.values(data).forEach(p=> cash += parseFloat(p.amount));
+      const balances = document.getElementById("displayCashOnHand").textContent;
+      document.getElementById("displayCashOnHand").textContent = cash;
     });
 
-    // Handle form submission
-    document.getElementById("absenceForm").addEventListener("submit", e => {
-      e.preventDefault();
-      const player = document.getElementById("player").value;
-      const date = document.getElementById("date").value;
-      const amount = document.getElementById("amount").value;
-      addAbsence(player, date, amount);
-      e.target.reset();
-    });
-
-    // Expose deleteAbsence globally for button onclick
-    window.deleteAbsence = deleteAbsence;
-  </script>
-</body>
-</html>
+    // --- EXPENSES ---
+    document.getElementById("recordExpense").onclick = () => {
+      const desc = document.getElementById("expenseDesc").value;
+      const amount = document.getElementById("expenseAmount").value;
+      push(ref(db, "expenses"), { desc, amount });
+    };
+    function deleteExpense(id){ set(ref(db, "expenses/"+id), null); }
+    onValue(ref(db, "expenses"), snap => {
+      const data = snap.val()
